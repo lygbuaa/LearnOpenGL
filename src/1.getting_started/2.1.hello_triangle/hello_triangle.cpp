@@ -16,6 +16,8 @@ const char *vertexShaderSource = "#version 330 core\n"
     "{\n"
     "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
     "}\0";
+    
+/** rgba */
 const char *fragmentShaderSource = "#version 330 core\n"
     "out vec4 FragColor;\n"
     "void main()\n"
@@ -72,6 +74,11 @@ int main()
         glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
         std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl;
     }
+    else
+    {
+        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+        std::cout << "INFO::SHADER::VERTEX::COMPILATION_SUCCESS\n" << infoLog << std::endl;
+    }
     // fragment shader
     unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
@@ -82,6 +89,11 @@ int main()
     {
         glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
         std::cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog << std::endl;
+    }
+    else
+    {
+        glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+        std::cout << "INFO::SHADER::FRAGMENT::COMPILATION_SUCCESS\n" << infoLog << std::endl;
     }
     // link shaders
     unsigned int shaderProgram = glCreateProgram();
@@ -100,9 +112,9 @@ int main()
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
     float vertices[] = {
-        -0.5f, -0.5f, 0.0f, // left  
+        -0.5f, -0.5f, 0.5f, // left  
          0.5f, -0.5f, 0.0f, // right 
-         0.0f,  0.5f, 0.0f  // top   
+         0.0f,  0.2f, -0.5f  // top   
     }; 
 
     unsigned int VBO, VAO;

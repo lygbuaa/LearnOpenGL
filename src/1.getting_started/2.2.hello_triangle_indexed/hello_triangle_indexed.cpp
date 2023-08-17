@@ -107,7 +107,7 @@ int main()
     };
     unsigned int indices[] = {  // note that we start from 0!
         0, 1, 3,  // first Triangle
-        1, 2, 3   // second Triangle
+        1, 2, 0   // second Triangle
     };
     unsigned int VBO, VAO, EBO;
     glGenVertexArrays(1, &VAO);
@@ -135,14 +135,26 @@ int main()
     // VAOs requires a call to glBindVertexArray anyways so we generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
     glBindVertexArray(0); 
 
+    int nrAttributes;
+    glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &nrAttributes);
+    std::cout << "Maximum nr of vertex attributes supported: " << nrAttributes << std::endl;
 
     // uncomment this call to draw in wireframe polygons.
-    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     // render loop
     // -----------
+    static int counter = 0;
     while (!glfwWindowShouldClose(window))
     {
+        if(counter % 100 < 50)
+        {
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        }
+        else
+        {
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        }
         // input
         // -----
         processInput(window);
@@ -155,7 +167,7 @@ int main()
         // draw our first triangle
         glUseProgram(shaderProgram);
         glBindVertexArray(VAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
-        //glDrawArrays(GL_TRIANGLES, 0, 6);
+        // glDrawArrays(GL_TRIANGLES, 0, 6);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         // glBindVertexArray(0); // no need to unbind it every time 
  
@@ -163,6 +175,7 @@ int main()
         // -------------------------------------------------------------------------------
         glfwSwapBuffers(window);
         glfwPollEvents();
+        counter += 1;
     }
 
     // optional: de-allocate all resources once they've outlived their purpose:
