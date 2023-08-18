@@ -12,6 +12,7 @@
 #include <learnopengl/model.h>
 
 #include <iostream>
+#include <opencv2/opencv.hpp>
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
@@ -32,6 +33,26 @@ bool firstMouse = true;
 // timing
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
+
+#define HANG_STOPWATCH() auto _ViwoUtilsPtr_ = HangStopWatch(__FUNCTION__);
+
+static inline __attribute__((always_inline)) uint64_t CurrentMicros() {
+    return std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::time_point_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now()).time_since_epoch()).count();
+}
+
+/*print function enter/exit/time_interval*/
+static std::shared_ptr<uint64_t> HangStopWatch(const char* func_name){
+    uint64_t* pts_us = new uint64_t;
+    *pts_us = CurrentMicros();
+    // LOGPF("stop watch trigger by %s (epoch %ld us)", func_name, *pts_us);
+    return std::shared_ptr<uint64_t>(pts_us, [func_name](uint64_t* ptr){
+        uint64_t ts_us = CurrentMicros();
+        fprintf(stderr, "stop watch end by %s (elapse = %ld us)\n", func_name, (ts_us - *ptr));
+        delete ptr;
+    });
+}
 
 int main()
 {
@@ -57,7 +78,8 @@ int main()
     }
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-    glfwSetCursorPosCallback(window, mouse_callback);
+    /** disable mouse */
+    // glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
 
     // tell GLFW to capture our mouse
@@ -220,6 +242,8 @@ int main()
     // draw as wireframe
     //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
+    unsigned char* data = (unsigned char*)malloc(3 * SCR_WIDTH * SCR_HEIGHT);
+
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
@@ -268,6 +292,17 @@ int main()
         shader.setMat4("model", glm::mat4(1.0f));
         glDrawArrays(GL_TRIANGLES, 0, 6);
         glBindVertexArray(0);
+        
+        /** read pixel and send to opencv */
+        {
+            HANG_STOPWATCH();
+            glReadPixels(0, 0, SCR_WIDTH, SCR_HEIGHT, GL_BGR, GL_UNSIGNED_BYTE, data);
+        }
+        cv::Mat show_img(SCR_HEIGHT, SCR_WIDTH, CV_8UC3, data);
+        cv::imshow("opencv_imshow", show_img);
+        cv::waitKey(20);
+
+        // cout << "glReadPixels: " << data << endl;
 
         // now bind back to default framebuffer and draw a quad plane with the attached framebuffer color texture
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
