@@ -14,6 +14,8 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
 
+#define USE_PBO_PACK
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
@@ -21,8 +23,8 @@ void processInput(GLFWwindow *window);
 unsigned int loadTexture(const char *path);
 
 // settings
-const unsigned int SCR_WIDTH = 800;
-const unsigned int SCR_HEIGHT = 600;
+const unsigned int SCR_WIDTH = 1920*4;
+const unsigned int SCR_HEIGHT = 1080*4;
 
 // camera
 Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
@@ -242,7 +244,22 @@ int main()
     // draw as wireframe
     //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-    unsigned char* data = (unsigned char*)malloc(3 * SCR_WIDTH * SCR_HEIGHT);
+    static const size_t PIXEL_PACK_SIZE = 4 * SCR_WIDTH * SCR_HEIGHT;
+    static const int PBO_N = 2;
+    unsigned char* data_ptr = (unsigned char*)malloc(PIXEL_PACK_SIZE);
+    cv::Mat rgba_img(SCR_HEIGHT, SCR_WIDTH, CV_8UC4, data_ptr);
+
+    unsigned int m_pbo_ids[PBO_N] = {0};
+    glGenBuffers(PBO_N, m_pbo_ids);
+    for(int i=0; i<PBO_N; i++)
+    {
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pbo_ids[i]);
+        glBufferData(GL_PIXEL_PACK_BUFFER, PIXEL_PACK_SIZE, 0, GL_STREAM_READ);
+        fprintf(stderr, "bind pbo[%d]: %d\n", i, m_pbo_ids[i]);
+    }
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    size_t frame_id = 0;
+    float total_dt = 0;
 
     // render loop
     // -----------
@@ -294,15 +311,49 @@ int main()
         glBindVertexArray(0);
         
         /** read pixel and send to opencv */
+        int64_t start_us = CurrentMicros();
+        /** refer to http://www.songho.ca/opengl/gl_pbo.html */
+#ifdef USE_PBO_PACK
         {
-            HANG_STOPWATCH();
-            glReadPixels(0, 0, SCR_WIDTH, SCR_HEIGHT, GL_BGR, GL_UNSIGNED_BYTE, data);
-        }
-        cv::Mat show_img(SCR_HEIGHT, SCR_WIDTH, CV_8UC3, data);
-        cv::imshow("opencv_imshow", show_img);
-        cv::waitKey(20);
+            // HANG_STOPWATCH();
+            
+            int index = frame_id % PBO_N;
+            int nextIndex = (index + 1) % PBO_N;
 
-        // cout << "glReadPixels: " << data << endl;
+            fprintf(stderr, "render pbo[%d], read pbo[%d]\n", index, nextIndex);
+
+            //将图像数据从帧缓冲区读回到 PBO 中
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pbo_ids[index]);
+            glReadPixels(0, 0, SCR_WIDTH, SCR_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+
+            // glMapBufferRange 获取 PBO 缓冲区指针
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, m_pbo_ids[nextIndex]);
+            GLubyte *bufPtr = static_cast<GLubyte *>(glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0,
+                                                                PIXEL_PACK_SIZE,
+                                                                GL_MAP_READ_BIT));
+            if (bufPtr) {
+                memcpy(data_ptr, bufPtr, PIXEL_PACK_SIZE);
+                glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+            }
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        }
+#else
+        {
+            // HANG_STOPWATCH();
+            glReadPixels(0, 0, SCR_WIDTH, SCR_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, data_ptr);
+        }
+#endif
+        int64_t end_us = CurrentMicros();
+        if(frame_id > 10)
+        {
+            total_dt += (end_us-start_us);
+            fprintf(stderr, "frame %ld, avg_dt: %.2f\n", frame_id, total_dt/(frame_id-10));
+        }
+
+        // cv::Mat bgr_img;
+        // cv::cvtColor(rgba_img, bgr_img, cv::COLOR_RGBA2BGR);
+        // cv::imshow("opencv_imshow", rgba_img);
+        // cv::waitKey(20);
 
         // now bind back to default framebuffer and draw a quad plane with the attached framebuffer color texture
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -321,6 +372,8 @@ int main()
         // -------------------------------------------------------------------------------
         glfwSwapBuffers(window);
         glfwPollEvents();
+
+        frame_id += 1;
     }
 
     // optional: de-allocate all resources once they've outlived their purpose:
@@ -410,7 +463,7 @@ unsigned int loadTexture(char const * path)
         else if (nrComponents == 3)
             format = GL_RGB;
         else if (nrComponents == 4)
-            format = GL_RGBA;
+            format = GL_BGR;
 
         glBindTexture(GL_TEXTURE_2D, textureID);
         glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
